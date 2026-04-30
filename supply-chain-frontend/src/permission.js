@@ -31,8 +31,14 @@ router.beforeEach(async(to, from, next) => {
           next()
         } catch (error) {
           console.error('获取用户信息失败:', error)
-          Message.error(error || '获取用户信息失败')
-          next()
+          await store.dispatch('user/resetToken')
+          Message.error(error || '获取用户信息失败，请重新登录')
+          if (to.path !== '/login') {
+            next(`/login?redirect=${to.path}`)
+          } else {
+            next()
+          }
+          NProgress.done()
         }
       }
     }
