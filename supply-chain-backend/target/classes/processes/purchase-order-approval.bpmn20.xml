@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             typeLanguage="http://www.w3.org/2001/XMLSchema"
+             expressionLanguage="http://www.w3.org/1999/XPath"
+             targetNamespace="http://www.flowable.org/processdef">
+
+    <process id="purchase-order-approval" name="采购订单审批流程" isExecutable="true">
+
+        <startEvent id="start" name="开始">
+            <outgoing>startToInitiator</outgoing>
+        </startEvent>
+
+        <sequenceFlow id="startToInitiator" sourceRef="start" targetRef="initiatorTask"/>
+
+        <userTask id="initiatorTask" name="提交采购申请" flowable:assignee="${initiator}">
+            <extensionElements>
+                <flowable:taskListener event="create" class="org.flowable.engine.impl.bpmn.listener.ScriptTaskListener">
+                    <flowable:field name="script">
+                        <flowable:string>
+                            task.setVariableLocal("approveComment", "");
+                        </flowable:string>
+                    </flowable:field>
+                    <flowable:field name="language">
+                        <flowable:string>javascript</flowable:string>
+                    </flowable:field>
+                </flowable:taskListener>
+            </extensionElements>
+            <incoming>startToInitiator</incoming>
+            <outgoing>initiatorToDeptManager</outgoing>
+        </userTask>
+
+        <sequenceFlow id="initiatorToDeptManager" sourceRef="initiatorTask" targetRef="deptManagerGateway"/>
+
+        <exclusiveGateway id="deptManagerGateway" name="金额判断"/>
+        <sequenceFlow id="deptManagerGatewayToDeptManager" sourceRef="deptManagerGateway" targetRef="deptManagerTask">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${totalAmount <= 10000}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="deptManagerGatewayToFinance" sourceRef="deptManagerGateway" targetRef="financeTask">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${totalAmount > 10000}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <userTask id="deptManagerTask" name="部门经理审批" flowable:candidateGroups="PURCHASE_MANAGER">
+            <extensionElements>
+                <flowable:taskListener event="create" class="org.flowable.engine.impl.bpmn.listener.ScriptTaskListener">
+                    <flowable:field name="script">
+                        <flowable:string>
+                            task.setVariableLocal("approveComment", "");
+                        </flowable:string>
+                    </flowable:field>
+                    <flowable:field name="language">
+                        <flowable:string>javascript</flowable:string>
+                    </flowable:field>
+                </flowable:taskListener>
+            </extensionElements>
+            <incoming>deptManagerGatewayToDeptManager</incoming>
+            <outgoing>deptManagerToApproveGateway</outgoing>
+        </userTask>
+
+        <userTask id="financeTask" name="财务审批" flowable:candidateGroups="FINANCE_STAFF">
+            <extensionElements>
+                <flowable:taskListener event="create" class="org.flowable.engine.impl.bpmn.listener.ScriptTaskListener">
+                    <flowable:field name="script">
+                        <flowable:string>
+                            task.setVariableLocal("approveComment", "");
+                        </flowable:string>
+                    </flowable:field>
+                    <flowable:field name="language">
+                        <flowable:string>javascript</flowable:string>
+                    </flowable:field>
+                </flowable:taskListener>
+            </extensionElements>
+            <incoming>deptManagerGatewayToFinance</incoming>
+            <outgoing>financeToApproveGateway</outgoing>
+        </userTask>
+
+        <exclusiveGateway id="approveGateway" name="审批结果判断"/>
+        <sequenceFlow id="deptManagerToApproveGateway" sourceRef="deptManagerTask" targetRef="approveGateway"/>
+        <sequenceFlow id="financeToApproveGateway" sourceRef="financeTask" targetRef="approveGateway"/>
+
+        <sequenceFlow id="approveGatewayToEnd" sourceRef="approveGateway" targetRef="approvedEnd">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${approved == true}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="approveGatewayToReject" sourceRef="approveGateway" targetRef="rejectedEnd">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${approved == false}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <endEvent id="approvedEnd" name="审批通过">
+            <extensionElements>
+                <flowable:executionListener event="end" class="org.flowable.engine.impl.bpmn.listener.ScriptExecutionListener">
+                    <flowable:field name="script">
+                        <flowable:string>
+                            execution.setVariable("approvalStatus", "APPROVED");
+                        </flowable:string>
+                    </flowable:field>
+                    <flowable:field name="language">
+                        <flowable:string>javascript</flowable:string>
+                    </flowable:field>
+                </flowable:executionListener>
+            </extensionElements>
+            <incoming>approveGatewayToEnd</incoming>
+        </endEvent>
+
+        <endEvent id="rejectedEnd" name="审批拒绝">
+            <extensionElements>
+                <flowable:executionListener event="end" class="org.flowable.engine.impl.bpmn.listener.ScriptExecutionListener">
+                    <flowable:field name="script">
+                        <flowable:string>
+                            execution.setVariable("approvalStatus", "REJECTED");
+                        </flowable:string>
+                    </flowable:field>
+                    <flowable:field name="language">
+                        <flowable:string>javascript</flowable:string>
+                    </flowable:field>
+                </flowable:executionListener>
+            </extensionElements>
+            <incoming>approveGatewayToReject</incoming>
+        </endEvent>
+
+    </process>
+
+    <bpmndi:BPMNDiagram id="BPMNDiagram_purchase-order-approval">
+        <bpmndi:BPMNPlane bpmnElement="purchase-order-approval" id="BPMNPlane_purchase-order-approval">
+            <bpmndi:BPMNShape bpmnElement="start" id="BPMNShape_start">
+                <omgdc:Bounds height="30.0" width="30.0" x="100.0" y="163.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="initiatorTask" id="BPMNShape_initiatorTask">
+                <omgdc:Bounds height="80.0" width="100.0" x="200.0" y="138.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="deptManagerGateway" id="BPMNShape_deptManagerGateway">
+                <omgdc:Bounds height="40.0" width="40.0" x="350.0" y="158.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="deptManagerTask" id="BPMNShape_deptManagerTask">
+                <omgdc:Bounds height="80.0" width="100.0" x="450.0" y="80.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="financeTask" id="BPMNShape_financeTask">
+                <omgdc:Bounds height="80.0" width="100.0" x="450.0" y="220.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="approveGateway" id="BPMNShape_approveGateway">
+                <omgdc:Bounds height="40.0" width="40.0" x="600.0" y="158.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="approvedEnd" id="BPMNShape_approvedEnd">
+                <omgdc:Bounds height="30.0" width="30.0" x="700.0" y="100.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="rejectedEnd" id="BPMNShape_rejectedEnd">
+                <omgdc:Bounds height="30.0" width="30.0" x="700.0" y="225.0"/>
+            </bpmndi:BPMNShape>
+        </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+
+</definitions>
