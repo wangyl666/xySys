@@ -1,7 +1,7 @@
 <template>
   <div style="display: flex; align-items: center;">
     <i v-if="icon" :class="icon" style="margin-right: 8px;"></i>
-    <span><slot v-if="!title">{{ title }}</slot></span>
+    <span>{{ title }}</span>
   </div>
 </template>
 

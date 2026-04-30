@@ -66,10 +66,33 @@ export default {
     ...mapState({
       sidebar: state => state.app.sidebar,
       device: state => state.app.device,
-      username: state => state.user.name
+      username: state => state.user.name,
+      roles: state => state.user.roles
     }),
     permission_routes() {
-      return router.options.routes.filter(route => !route.meta?.hidden !== true)
+      const filterRoutes = (routes, roles) => {
+        const res = []
+        routes.forEach(route => {
+          const tmp = { ...route }
+          if (hasPermission(roles, tmp)) {
+            if (tmp.children) {
+              tmp.children = filterRoutes(tmp.children, roles)
+            }
+            res.push(tmp)
+          }
+        })
+        return res
+      }
+
+      const hasPermission = (roles, route) => {
+        if (route.meta && route.meta.roles) {
+          return roles.some(role => route.meta.roles.includes(role))
+        }
+        return true
+      }
+
+      const accessedRoutes = filterRoutes(router.options.routes, this.roles)
+      return accessedRoutes.filter(route => route.meta?.hidden !== true)
     },
     activeMenu() {
       const route = this.$route
