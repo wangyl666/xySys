@@ -96,6 +96,12 @@ const routes = [
         name: 'MyProcess',
         component: () => import('@/views/workflow/my-process/index.vue'),
         meta: { title: '我的流程', icon: 'el-icon-s-promotion', roles: ['SUPER_ADMIN', 'PURCHASE_MANAGER', 'PURCHASE_STAFF', 'FINANCE_STAFF'] }
+      },
+      {
+        path: 'approval-flow',
+        name: 'ApprovalFlow',
+        component: () => import('@/views/workflow/approval-flow/index.vue'),
+        meta: { title: '审批流配置', icon: 'el-icon-setting', roles: ['SUPER_ADMIN'] }
       }
     ]
   }
