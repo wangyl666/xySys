@@ -2,8 +2,9 @@
 CREATE TABLE IF NOT EXISTS sc_approval_flow (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
     flow_name VARCHAR(100) NOT NULL COMMENT '流程名称',
-    flow_code VARCHAR(100) NOT NULL COMMENT '流程编码',
+    flow_code VARCHAR(100) NOT NULL COMMENT '流程编码（业务编码）',
     flow_type VARCHAR(50) COMMENT '流程类型',
+    process_key VARCHAR(100) COMMENT 'BPMN流程定义Key（对应BPMN文件中的process id）',
     description VARCHAR(500) COMMENT '描述',
     status INT DEFAULT 0 COMMENT '状态：0-禁用，1-启用',
     version INT DEFAULT 1 COMMENT '版本号',
@@ -93,8 +94,8 @@ CREATE TABLE IF NOT EXISTS sc_bill_flow_config (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='单据审批流配置表';
 
 -- 初始化采购订单审批流模板
-INSERT INTO sc_approval_flow (flow_name, flow_code, flow_type, description, status, version, create_by, create_time)
-VALUES ('采购订单审批流程', 'purchase-order-approval', 'PURCHASE_ORDER', '采购订单提交后的审批流程', 0, 1, 1, NOW());
+INSERT INTO sc_approval_flow (flow_name, flow_code, flow_type, process_key, description, status, version, create_by, create_time)
+VALUES ('采购订单审批流程', 'purchase-order-approval', 'PURCHASE_ORDER', 'purchase-order-approval', '采购订单提交后的审批流程', 1, 1, 1, NOW());
 
 -- 初始化单据类型
 INSERT INTO sc_bill_type (bill_type_code, bill_type_name, description, status, sort_order, module_name, create_by, create_time)
@@ -106,9 +107,16 @@ VALUES ('supplier', '供应商', '供应链模块的供应商', 1, 2, 'supply_ch
 INSERT INTO sc_bill_type (bill_type_code, bill_type_name, description, status, sort_order, module_name, create_by, create_time)
 VALUES ('material', '物料', '供应链模块的物料', 1, 3, 'supply_chain', 1, NOW());
 
+-- 初始化单据流程配置（将采购订单单据类型与采购订单审批流程关联）
+INSERT INTO sc_bill_flow_config (bill_type_id, bill_type_code, flow_id, flow_code, status, is_default, description, create_by, create_time)
+VALUES (1, 'purchase_order', 1, 'purchase-order-approval', 1, 1, '采购订单默认审批流程配置', 1, NOW());
+
 -- 示例：添加审批节点（需要根据实际需求配置）
 -- INSERT INTO sc_approval_node (flow_id, node_code, node_name, node_type, sort_order, approval_type, description)
 -- VALUES (1, 'node1Task', '部门经理审批', 1, 1, 'ROLE', '金额<=10000时由部门经理审批');
 
 -- INSERT INTO sc_approval_node (flow_id, node_code, node_name, node_type, sort_order, approval_type, condition_expression, description)
 -- VALUES (1, 'node2Task', '财务审批', 1, 2, 'ROLE', 'totalAmount > 10000', '金额>10000时由财务审批');
+
+-- 为已存在的表添加 process_key 字段（如果表已存在但没有该字段）
+-- ALTER TABLE sc_approval_flow ADD COLUMN IF NOT EXISTS process_key VARCHAR(100) COMMENT 'BPMN流程定义Key（对应BPMN文件中的process id）';

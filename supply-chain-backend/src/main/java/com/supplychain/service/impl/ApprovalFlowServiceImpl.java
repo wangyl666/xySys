@@ -264,6 +264,7 @@ public class ApprovalFlowServiceImpl extends ServiceImpl<ApprovalFlowMapper, App
         
         Map<String, Object> result = new HashMap<>();
         result.put("flow", flow);
+        result.put("processKey", StringUtils.hasText(flow.getProcessKey()) ? flow.getProcessKey() : flow.getFlowCode());
         
         List<ApprovalNode> nodes = getNodesByFlowId(flow.getId());
         List<Map<String, Object>> nodeList = new ArrayList<>();
@@ -291,6 +292,7 @@ public class ApprovalFlowServiceImpl extends ServiceImpl<ApprovalFlowMapper, App
         
         Map<String, Object> result = new HashMap<>();
         result.put("flow", flowConfig.get("flow"));
+        result.put("processKey", flowConfig.get("processKey"));
         
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> nodes = (List<Map<String, Object>>) flowConfig.get("nodes");

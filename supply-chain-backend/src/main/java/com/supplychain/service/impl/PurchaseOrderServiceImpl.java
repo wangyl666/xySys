@@ -206,26 +206,36 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
             variables.put("node3_enabled", false);
         }
 
-        String flowCode = "purchase-order-approval";
-        if (flowConfig != null && flowConfig.get("flow") != null) {
-            Object flowObj = flowConfig.get("flow");
-            if (flowObj instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> flowMap = (Map<String, Object>) flowObj;
-                if (flowMap.get("flowCode") != null) {
-                    flowCode = flowMap.get("flowCode").toString();
+        String processKey = "purchase-order-approval";
+        if (flowConfig != null) {
+            if (flowConfig.get("processKey") != null) {
+                processKey = flowConfig.get("processKey").toString();
+            } else if (flowConfig.get("flow") != null) {
+                Object flowObj = flowConfig.get("flow");
+                if (flowObj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> flowMap = (Map<String, Object>) flowObj;
+                    if (flowMap.get("processKey") != null && StringUtils.hasText(flowMap.get("processKey").toString())) {
+                        processKey = flowMap.get("processKey").toString();
+                    } else if (flowMap.get("flowCode") != null) {
+                        processKey = flowMap.get("flowCode").toString();
+                    }
+                } else if (flowObj instanceof com.supplychain.entity.ApprovalFlow) {
+                    com.supplychain.entity.ApprovalFlow flow = (com.supplychain.entity.ApprovalFlow) flowObj;
+                    if (StringUtils.hasText(flow.getProcessKey())) {
+                        processKey = flow.getProcessKey();
+                    } else {
+                        processKey = flow.getFlowCode();
+                    }
                 }
-            } else if (flowObj instanceof com.supplychain.entity.ApprovalFlow) {
-                com.supplychain.entity.ApprovalFlow flow = (com.supplychain.entity.ApprovalFlow) flowObj;
-                flowCode = flow.getFlowCode();
             }
         }
         
-        log.info("启动审批流程，流程编码: {}, 流程变量: {}", flowCode, variables);
+        log.info("启动审批流程，流程定义Key: {}, 流程变量: {}", processKey, variables);
         
         String initiator = order.getCreateBy() != null ? String.valueOf(order.getCreateBy()) : null;
         String processInstanceId = workflowService.startProcessInstance(
-                flowCode,
+                processKey,
                 order.getOrderNo(),
                 initiator,
                 variables

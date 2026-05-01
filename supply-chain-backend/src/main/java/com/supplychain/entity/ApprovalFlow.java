@@ -12,6 +12,7 @@ public class ApprovalFlow extends BaseEntity {
     private String flowName;
     private String flowCode;
     private String flowType;
+    private String processKey;
     private String description;
     private Integer status;
     private Integer version;
