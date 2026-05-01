@@ -20,73 +20,81 @@
 
         <userTask id="initiatorTask" name="提交采购申请" flowable:assignee="${initiator}">
             <extensionElements>
-                <flowable:taskListener event="create" class="org.flowable.engine.impl.bpmn.listener.ScriptTaskListener">
-                    <flowable:field name="script">
-                        <flowable:string>
-                            task.setVariableLocal("approveComment", "");
-                        </flowable:string>
-                    </flowable:field>
-                    <flowable:field name="language">
-                        <flowable:string>javascript</flowable:string>
-                    </flowable:field>
-                </flowable:taskListener>
+                <flowable:taskListener event="create" class="com.supplychain.listener.DynamicApprovalTaskListener"/>
             </extensionElements>
             <incoming>startToInitiator</incoming>
-            <outgoing>initiatorToDeptManager</outgoing>
+            <outgoing>initiatorToNode1</outgoing>
         </userTask>
 
-        <sequenceFlow id="initiatorToDeptManager" sourceRef="initiatorTask" targetRef="deptManagerGateway"/>
+        <sequenceFlow id="initiatorToNode1" sourceRef="initiatorTask" targetRef="node1Gateway"/>
 
-        <exclusiveGateway id="deptManagerGateway" name="金额判断"/>
-        <sequenceFlow id="deptManagerGatewayToDeptManager" sourceRef="deptManagerGateway" targetRef="deptManagerTask">
+        <exclusiveGateway id="node1Gateway" name="节点1条件判断"/>
+        <sequenceFlow id="node1GatewayToNode1" sourceRef="node1Gateway" targetRef="node1Task">
             <conditionExpression xsi:type="tFormalExpression">
-                <![CDATA[${totalAmount <= 10000}]]>
+                <![CDATA[${node1_enabled == true}]]>
             </conditionExpression>
         </sequenceFlow>
-        <sequenceFlow id="deptManagerGatewayToFinance" sourceRef="deptManagerGateway" targetRef="financeTask">
+        <sequenceFlow id="node1GatewayToNode2" sourceRef="node1Gateway" targetRef="node2Gateway">
             <conditionExpression xsi:type="tFormalExpression">
-                <![CDATA[${totalAmount > 10000}]]>
+                <![CDATA[${node1_enabled == false}]]>
             </conditionExpression>
         </sequenceFlow>
 
-        <userTask id="deptManagerTask" name="部门经理审批" flowable:candidateGroups="PURCHASE_MANAGER">
+        <userTask id="node1Task" name="节点1审批">
             <extensionElements>
-                <flowable:taskListener event="create" class="org.flowable.engine.impl.bpmn.listener.ScriptTaskListener">
-                    <flowable:field name="script">
-                        <flowable:string>
-                            task.setVariableLocal("approveComment", "");
-                        </flowable:string>
-                    </flowable:field>
-                    <flowable:field name="language">
-                        <flowable:string>javascript</flowable:string>
-                    </flowable:field>
-                </flowable:taskListener>
+                <flowable:taskListener event="create" class="com.supplychain.listener.DynamicApprovalTaskListener"/>
             </extensionElements>
-            <incoming>deptManagerGatewayToDeptManager</incoming>
-            <outgoing>deptManagerToApproveGateway</outgoing>
+            <incoming>node1GatewayToNode1</incoming>
+            <outgoing>node1ToNode2</outgoing>
         </userTask>
 
-        <userTask id="financeTask" name="财务审批" flowable:candidateGroups="FINANCE_STAFF">
+        <sequenceFlow id="node1ToNode2" sourceRef="node1Task" targetRef="node2Gateway"/>
+
+        <exclusiveGateway id="node2Gateway" name="节点2条件判断"/>
+        <sequenceFlow id="node2GatewayToNode2" sourceRef="node2Gateway" targetRef="node2Task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${node2_enabled == true}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="node2GatewayToNode3" sourceRef="node2Gateway" targetRef="node3Gateway">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${node2_enabled == false}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <userTask id="node2Task" name="节点2审批">
             <extensionElements>
-                <flowable:taskListener event="create" class="org.flowable.engine.impl.bpmn.listener.ScriptTaskListener">
-                    <flowable:field name="script">
-                        <flowable:string>
-                            task.setVariableLocal("approveComment", "");
-                        </flowable:string>
-                    </flowable:field>
-                    <flowable:field name="language">
-                        <flowable:string>javascript</flowable:string>
-                    </flowable:field>
-                </flowable:taskListener>
+                <flowable:taskListener event="create" class="com.supplychain.listener.DynamicApprovalTaskListener"/>
             </extensionElements>
-            <incoming>deptManagerGatewayToFinance</incoming>
-            <outgoing>financeToApproveGateway</outgoing>
+            <incoming>node2GatewayToNode2</incoming>
+            <outgoing>node2ToNode3</outgoing>
         </userTask>
+
+        <sequenceFlow id="node2ToNode3" sourceRef="node2Task" targetRef="node3Gateway"/>
+
+        <exclusiveGateway id="node3Gateway" name="节点3条件判断"/>
+        <sequenceFlow id="node3GatewayToNode3" sourceRef="node3Gateway" targetRef="node3Task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${node3_enabled == true}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="node3GatewayToApprove" sourceRef="node3Gateway" targetRef="approveGateway">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${node3_enabled == false}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <userTask id="node3Task" name="节点3审批">
+            <extensionElements>
+                <flowable:taskListener event="create" class="com.supplychain.listener.DynamicApprovalTaskListener"/>
+            </extensionElements>
+            <incoming>node3GatewayToNode3</incoming>
+            <outgoing>node3ToApprove</outgoing>
+        </userTask>
+
+        <sequenceFlow id="node3ToApprove" sourceRef="node3Task" targetRef="approveGateway"/>
 
         <exclusiveGateway id="approveGateway" name="审批结果判断"/>
-        <sequenceFlow id="deptManagerToApproveGateway" sourceRef="deptManagerTask" targetRef="approveGateway"/>
-        <sequenceFlow id="financeToApproveGateway" sourceRef="financeTask" targetRef="approveGateway"/>
-
         <sequenceFlow id="approveGatewayToEnd" sourceRef="approveGateway" targetRef="approvedEnd">
             <conditionExpression xsi:type="tFormalExpression">
                 <![CDATA[${approved == true}]]>
@@ -100,32 +108,14 @@
 
         <endEvent id="approvedEnd" name="审批通过">
             <extensionElements>
-                <flowable:executionListener event="end" class="org.flowable.engine.impl.bpmn.listener.ScriptExecutionListener">
-                    <flowable:field name="script">
-                        <flowable:string>
-                            execution.setVariable("approvalStatus", "APPROVED");
-                        </flowable:string>
-                    </flowable:field>
-                    <flowable:field name="language">
-                        <flowable:string>javascript</flowable:string>
-                    </flowable:field>
-                </flowable:executionListener>
+                <flowable:executionListener event="end" class="com.supplychain.listener.PurchaseOrderEndListener"/>
             </extensionElements>
             <incoming>approveGatewayToEnd</incoming>
         </endEvent>
 
         <endEvent id="rejectedEnd" name="审批拒绝">
             <extensionElements>
-                <flowable:executionListener event="end" class="org.flowable.engine.impl.bpmn.listener.ScriptExecutionListener">
-                    <flowable:field name="script">
-                        <flowable:string>
-                            execution.setVariable("approvalStatus", "REJECTED");
-                        </flowable:string>
-                    </flowable:field>
-                    <flowable:field name="language">
-                        <flowable:string>javascript</flowable:string>
-                    </flowable:field>
-                </flowable:executionListener>
+                <flowable:executionListener event="end" class="com.supplychain.listener.PurchaseOrderEndListener"/>
             </extensionElements>
             <incoming>approveGatewayToReject</incoming>
         </endEvent>
@@ -140,23 +130,20 @@
             <bpmndi:BPMNShape bpmnElement="initiatorTask" id="BPMNShape_initiatorTask">
                 <omgdc:Bounds height="80.0" width="100.0" x="200.0" y="138.0"/>
             </bpmndi:BPMNShape>
-            <bpmndi:BPMNShape bpmnElement="deptManagerGateway" id="BPMNShape_deptManagerGateway">
-                <omgdc:Bounds height="40.0" width="40.0" x="350.0" y="158.0"/>
+            <bpmndi:BPMNShape bpmnElement="node1Task" id="BPMNShape_node1Task">
+                <omgdc:Bounds height="80.0" width="100.0" x="350.0" y="138.0"/>
             </bpmndi:BPMNShape>
-            <bpmndi:BPMNShape bpmnElement="deptManagerTask" id="BPMNShape_deptManagerTask">
-                <omgdc:Bounds height="80.0" width="100.0" x="450.0" y="80.0"/>
+            <bpmndi:BPMNShape bpmnElement="node2Task" id="BPMNShape_node2Task">
+                <omgdc:Bounds height="80.0" width="100.0" x="500.0" y="138.0"/>
             </bpmndi:BPMNShape>
-            <bpmndi:BPMNShape bpmnElement="financeTask" id="BPMNShape_financeTask">
-                <omgdc:Bounds height="80.0" width="100.0" x="450.0" y="220.0"/>
-            </bpmndi:BPMNShape>
-            <bpmndi:BPMNShape bpmnElement="approveGateway" id="BPMNShape_approveGateway">
-                <omgdc:Bounds height="40.0" width="40.0" x="600.0" y="158.0"/>
+            <bpmndi:BPMNShape bpmnElement="node3Task" id="BPMNShape_node3Task">
+                <omgdc:Bounds height="80.0" width="100.0" x="650.0" y="138.0"/>
             </bpmndi:BPMNShape>
             <bpmndi:BPMNShape bpmnElement="approvedEnd" id="BPMNShape_approvedEnd">
-                <omgdc:Bounds height="30.0" width="30.0" x="700.0" y="100.0"/>
+                <omgdc:Bounds height="30.0" width="30.0" x="800.0" y="163.0"/>
             </bpmndi:BPMNShape>
             <bpmndi:BPMNShape bpmnElement="rejectedEnd" id="BPMNShape_rejectedEnd">
-                <omgdc:Bounds height="30.0" width="30.0" x="700.0" y="225.0"/>
+                <omgdc:Bounds height="30.0" width="30.0" x="800.0" y="225.0"/>
             </bpmndi:BPMNShape>
         </bpmndi:BPMNPlane>
     </bpmndi:BPMNDiagram>
