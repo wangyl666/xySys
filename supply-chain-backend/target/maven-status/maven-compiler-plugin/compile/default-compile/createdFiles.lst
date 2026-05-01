@@ -1,0 +1,13 @@
+com\supplychain\service\ApprovalFlowService.class
+com\supplychain\mapper\ApprovalFlowMapper.class
+com\supplychain\util\SecurityUtils.class
+com\supplychain\entity\ApprovalFlow.class
+com\supplychain\mapper\ApprovalNodeAssigneeMapper.class
+com\supplychain\entity\ApprovalNode.class
+com\supplychain\service\impl\ApprovalFlowServiceImpl.class
+com\supplychain\config\WebMvcConfig.class
+com\supplychain\interceptor\JwtInterceptor.class
+com\supplychain\mapper\ApprovalNodeMapper.class
+com\supplychain\listener\DynamicApprovalTaskListener.class
+com\supplychain\controller\ApprovalFlowController.class
+com\supplychain\entity\ApprovalNodeAssignee.class
