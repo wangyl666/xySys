@@ -3,13 +3,18 @@ package com.supplychain.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.supplychain.entity.ApprovalNode;
+import com.supplychain.entity.ApprovalNodeAssignee;
 import com.supplychain.entity.PurchaseOrder;
 import com.supplychain.entity.PurchaseOrderItem;
 import com.supplychain.exception.BusinessException;
 import com.supplychain.mapper.PurchaseOrderItemMapper;
 import com.supplychain.mapper.PurchaseOrderMapper;
+import com.supplychain.service.ApprovalFlowService;
+import com.supplychain.service.BillFlowConfigService;
 import com.supplychain.service.PurchaseOrderService;
 import com.supplychain.service.WorkflowService;
+import com.supplychain.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,6 +25,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +37,10 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
 
     private final PurchaseOrderItemMapper orderItemMapper;
     private final WorkflowService workflowService;
+    private final ApprovalFlowService approvalFlowService;
+    private final BillFlowConfigService billFlowConfigService;
+    
+    private static final String BILL_TYPE_CODE = "purchase_order";
 
     @Override
     public Page<PurchaseOrder> pageQuery(Page<PurchaseOrder> page, PurchaseOrder query) {
@@ -49,6 +59,14 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
                 wrapper.eq(PurchaseOrder::getApprovalStatus, query.getApprovalStatus());
             }
         }
+        
+        if (!SecurityUtils.isAdmin()) {
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            if (currentUserId != null) {
+                wrapper.eq(PurchaseOrder::getCreateBy, currentUserId);
+            }
+        }
+        
         wrapper.orderByDesc(PurchaseOrder::getCreateTime);
         return this.page(page, wrapper);
     }
@@ -138,10 +156,78 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
         variables.put("supplierId", order.getSupplierId());
         variables.put("totalAmount", order.getTotalAmount());
         variables.put("initiator", order.getCreateBy());
+        
+        Map<String, Object> flowConfig = billFlowConfigService.getFlowConfigByBillTypeCode(
+                BILL_TYPE_CODE, 
+                variables
+        );
+        
+        if (flowConfig != null) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> nodes = (List<Map<String, Object>>) flowConfig.get("nodes");
+            if (nodes != null) {
+                for (int i = 0; i < nodes.size() && i < 3; i++) {
+                    Map<String, Object> nodeConfig = nodes.get(i);
+                    int nodeIndex = i + 1;
+                    String nodeKey = "node" + nodeIndex;
+                    
+                    variables.put(nodeKey + "_enabled", true);
+                    
+                    @SuppressWarnings("unchecked")
+                    List<String> assigneeUserIds = (List<String>) nodeConfig.get("assigneeUserIds");
+                    if (assigneeUserIds != null && !assigneeUserIds.isEmpty()) {
+                        if (assigneeUserIds.size() == 1) {
+                            variables.put(nodeKey + "Task_assignee", assigneeUserIds.get(0));
+                        } else {
+                            variables.put(nodeKey + "Task_candidateUsers", assigneeUserIds);
+                        }
+                    }
+                    
+                    @SuppressWarnings("unchecked")
+                    List<String> assigneeGroupIds = (List<String>) nodeConfig.get("assigneeGroupIds");
+                    if (assigneeGroupIds != null && !assigneeGroupIds.isEmpty()) {
+                        variables.put(nodeKey + "Task_candidateGroups", assigneeGroupIds);
+                    }
+                }
+                
+                for (int i = nodes.size(); i < 3; i++) {
+                    int nodeIndex = i + 1;
+                    variables.put("node" + nodeIndex + "_enabled", false);
+                }
+            } else {
+                variables.put("node1_enabled", false);
+                variables.put("node2_enabled", false);
+                variables.put("node3_enabled", false);
+            }
+        } else {
+            log.warn("未找到采购订单审批流配置，使用默认流程");
+            variables.put("node1_enabled", false);
+            variables.put("node2_enabled", false);
+            variables.put("node3_enabled", false);
+        }
 
+        String flowCode = "purchase-order-approval";
+        if (flowConfig != null && flowConfig.get("flow") != null) {
+            Object flowObj = flowConfig.get("flow");
+            if (flowObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> flowMap = (Map<String, Object>) flowObj;
+                if (flowMap.get("flowCode") != null) {
+                    flowCode = flowMap.get("flowCode").toString();
+                }
+            } else if (flowObj instanceof com.supplychain.entity.ApprovalFlow) {
+                com.supplychain.entity.ApprovalFlow flow = (com.supplychain.entity.ApprovalFlow) flowObj;
+                flowCode = flow.getFlowCode();
+            }
+        }
+        
+        log.info("启动审批流程，流程编码: {}, 流程变量: {}", flowCode, variables);
+        
+        String initiator = order.getCreateBy() != null ? String.valueOf(order.getCreateBy()) : null;
         String processInstanceId = workflowService.startProcessInstance(
-                "purchase-order-approval",
+                flowCode,
                 order.getOrderNo(),
+                initiator,
                 variables
         );
 
