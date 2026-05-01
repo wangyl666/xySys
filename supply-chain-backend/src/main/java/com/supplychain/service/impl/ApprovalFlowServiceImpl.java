@@ -251,6 +251,8 @@ public class ApprovalFlowServiceImpl extends ServiceImpl<ApprovalFlowMapper, App
 
     @Override
     public Map<String, Object> getFlowConfigByCode(String flowCode) {
+        log.info("根据流程编码 [{}] 获取审批流配置", flowCode);
+        
         LambdaQueryWrapper<ApprovalFlow> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ApprovalFlow::getFlowCode, flowCode);
         wrapper.eq(ApprovalFlow::getStatus, 1);
@@ -259,27 +261,52 @@ public class ApprovalFlowServiceImpl extends ServiceImpl<ApprovalFlowMapper, App
         
         ApprovalFlow flow = this.getOne(wrapper);
         if (flow == null) {
+            log.error("未找到启用的审批流: flowCode={}", flowCode);
+            log.error("请检查 sc_approval_flow 表：");
+            log.error("  - 是否存在 flow_code = '{}' 的记录", flowCode);
+            log.error("  - status 是否为 1（启用）");
             return null;
         }
         
+        log.info("找到审批流: flowId={}, flowName={}, flowCode={}, processKey={}", 
+                flow.getId(), flow.getFlowName(), flow.getFlowCode(), flow.getProcessKey());
+        
+        String processKey = StringUtils.hasText(flow.getProcessKey()) ? flow.getProcessKey() : flow.getFlowCode();
+        log.info("使用的流程定义Key: {}", processKey);
+        
         Map<String, Object> result = new HashMap<>();
         result.put("flow", flow);
-        result.put("processKey", StringUtils.hasText(flow.getProcessKey()) ? flow.getProcessKey() : flow.getFlowCode());
+        result.put("processKey", processKey);
         
         List<ApprovalNode> nodes = getNodesByFlowId(flow.getId());
+        log.info("审批流配置的节点数量: {}", nodes.size());
+        
         List<Map<String, Object>> nodeList = new ArrayList<>();
         
         for (ApprovalNode node : nodes) {
+            log.info("  节点: nodeCode={}, nodeName={}, conditionExpression={}", 
+                    node.getNodeCode(), node.getNodeName(), node.getConditionExpression());
+            
             Map<String, Object> nodeMap = new HashMap<>();
             nodeMap.put("node", node);
             
             List<ApprovalNodeAssignee> assignees = getAssigneesByNodeId(node.getId());
+            log.info("    审批人数量: {}", assignees.size());
+            for (ApprovalNodeAssignee assignee : assignees) {
+                log.info("      - assigneeType={}, assigneeId={}, assigneeName={}, assigneeCode={}",
+                        assignee.getAssigneeType(), assignee.getAssigneeId(), assignee.getAssigneeName(), assignee.getAssigneeCode());
+            }
             nodeMap.put("assignees", assignees);
             
             nodeList.add(nodeMap);
         }
         
         result.put("nodes", nodeList);
+        
+        if (nodes.isEmpty()) {
+            log.warn("审批流 [{}] 没有配置审批节点，提交后将直接通过", flowCode);
+        }
+        
         return result;
     }
 

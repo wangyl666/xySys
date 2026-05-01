@@ -235,7 +235,23 @@ public class BillFlowConfigServiceImpl extends ServiceImpl<BillFlowConfigMapper,
     @Override
     public String getFlowCodeByBillTypeCode(String billTypeCode) {
         if (!StringUtils.hasText(billTypeCode)) {
+            log.warn("单据类型编码为空");
             return null;
+        }
+        
+        log.info("查找单据类型 [{}] 对应的审批流配置", billTypeCode);
+        
+        List<BillFlowConfig> allConfigs = this.list(
+                new LambdaQueryWrapper<BillFlowConfig>()
+                        .eq(BillFlowConfig::getBillTypeCode, billTypeCode)
+                        .orderByDesc(BillFlowConfig::getIsDefault)
+                        .orderByDesc(BillFlowConfig::getCreateTime)
+        );
+        
+        log.info("单据类型 [{}] 共有 {} 个配置记录", billTypeCode, allConfigs.size());
+        for (BillFlowConfig cfg : allConfigs) {
+            log.info("  - 配置: flowCode={}, status={}, isDefault={}", 
+                    cfg.getFlowCode(), cfg.getStatus(), cfg.getIsDefault());
         }
         
         BillFlowConfig config = this.getOne(
@@ -248,8 +264,11 @@ public class BillFlowConfigServiceImpl extends ServiceImpl<BillFlowConfigMapper,
         );
         
         if (config != null) {
+            log.info("找到默认启用的配置: flowCode={}", config.getFlowCode());
             return config.getFlowCode();
         }
+        
+        log.warn("未找到默认启用的配置，查找任意启用的配置");
         
         config = this.getOne(
                 new LambdaQueryWrapper<BillFlowConfig>()
@@ -259,18 +278,43 @@ public class BillFlowConfigServiceImpl extends ServiceImpl<BillFlowConfigMapper,
                         .last("LIMIT 1")
         );
         
-        return config != null ? config.getFlowCode() : null;
+        if (config != null) {
+            log.info("找到启用的配置: flowCode={}", config.getFlowCode());
+            return config.getFlowCode();
+        }
+        
+        log.error("单据类型 [{}] 未找到任何启用的审批流配置", billTypeCode);
+        return null;
     }
 
     @Override
     public Map<String, Object> getFlowConfigByBillTypeCode(String billTypeCode, Map<String, Object> variables) {
+        log.info("开始获取单据类型 [{}] 的审批流配置", billTypeCode);
+        
         String flowCode = getFlowCodeByBillTypeCode(billTypeCode);
         if (flowCode == null) {
-            log.warn("未找到单据类型 [{}] 对应的审批流配置", billTypeCode);
+            log.error("未找到单据类型 [{}] 对应的审批流配置", billTypeCode);
+            log.error("请检查：");
+            log.error("  1. sc_bill_type 表是否存在 bill_type_code = '{}' 的记录", billTypeCode);
+            log.error("  2. sc_bill_flow_config 表是否存在 bill_type_code = '{}' 且 status = 1 的记录", billTypeCode);
+            log.error("  3. 对应的审批流是否启用（sc_approval_flow.status = 1）");
             return null;
         }
         
         log.info("根据单据类型 [{}] 找到审批流编码: {}", billTypeCode, flowCode);
-        return approvalFlowService.getFlowConfigForProcess(flowCode, variables);
+        
+        Map<String, Object> result = approvalFlowService.getFlowConfigForProcess(flowCode, variables);
+        
+        if (result == null) {
+            log.error("审批流编码 [{}] 未找到有效的审批流配置", flowCode);
+            log.error("请检查 sc_approval_flow 表：");
+            log.error("  - flow_code = '{}' 的记录是否存在", flowCode);
+            log.error("  - status 是否为 1（启用）");
+            log.error("  - process_key 是否配置正确（应为 'purchase-order-approval'）");
+            return null;
+        }
+        
+        log.info("成功获取审批流配置: flowCode={}", flowCode);
+        return result;
     }
 }
