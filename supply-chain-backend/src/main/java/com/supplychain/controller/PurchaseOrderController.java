@@ -110,12 +110,30 @@ public class PurchaseOrderController {
             order.setSupplierId(Long.parseLong(map.get("supplierId").toString()));
         }
         if (map.get("expectedDeliveryDate") != null) {
-            order.setExpectedDeliveryDate(java.time.LocalDateTime.parse(map.get("expectedDeliveryDate").toString()));
+            String dateStr = map.get("expectedDeliveryDate").toString();
+            java.time.LocalDateTime dateTime = parseDateTime(dateStr);
+            order.setExpectedDeliveryDate(dateTime);
         }
         if (map.get("remark") != null) {
             order.setRemark(map.get("remark").toString());
         }
         return order;
+    }
+
+    private java.time.LocalDateTime parseDateTime(String dateStr) {
+        if (dateStr == null || dateStr.isEmpty()) {
+            return null;
+        }
+        try {
+            if (dateStr.endsWith("Z") || dateStr.contains("+") || dateStr.contains("-") && dateStr.indexOf('-') != 4) {
+                return java.time.ZonedDateTime.parse(dateStr, java.time.format.DateTimeFormatter.ISO_DATE_TIME)
+                        .withZoneSameInstant(java.time.ZoneId.systemDefault())
+                        .toLocalDateTime();
+            }
+            return java.time.LocalDateTime.parse(dateStr);
+        } catch (Exception e) {
+            throw new RuntimeException("日期格式解析失败: " + dateStr, e);
+        }
     }
 
     private List<PurchaseOrderItem> convertToPurchaseOrderItemList(List<Map<String, Object>> itemsMap) {
