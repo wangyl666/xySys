@@ -102,6 +102,18 @@ const routes = [
         name: 'ApprovalFlow',
         component: () => import('@/views/workflow/approval-flow/index.vue'),
         meta: { title: '审批流配置', icon: 'el-icon-setting', roles: ['SUPER_ADMIN'] }
+      },
+      {
+        path: 'bill-type',
+        name: 'BillType',
+        component: () => import('@/views/workflow/bill-type/index.vue'),
+        meta: { title: '单据类型', icon: 'el-icon-tickets', roles: ['SUPER_ADMIN'] }
+      },
+      {
+        path: 'bill-flow-config',
+        name: 'BillFlowConfig',
+        component: () => import('@/views/workflow/bill-flow-config/index.vue'),
+        meta: { title: '单据审批流配置', icon: 'el-icon-connection', roles: ['SUPER_ADMIN'] }
       }
     ]
   }
