@@ -89,4 +89,9 @@ public interface WorkflowService {
      * 获取我参与的流程实例列表
      */
     List<Map<String, Object>> getMyInvolvedProcesses(String userId);
+
+    /**
+     * 根据流程实例ID和任务定义Key完成任务
+     */
+    void completeTaskByProcessInstanceIdAndTaskKey(String processInstanceId, String taskDefinitionKey, Map<String, Object> variables);
 }

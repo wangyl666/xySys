@@ -348,4 +348,23 @@ public class WorkflowServiceImpl implements WorkflowService {
         
         return map;
     }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void completeTaskByProcessInstanceIdAndTaskKey(String processInstanceId, String taskDefinitionKey, Map<String, Object> variables) {
+        log.info("根据流程实例ID和任务定义Key完成任务: processInstanceId={}, taskDefinitionKey={}", processInstanceId, taskDefinitionKey);
+        
+        Task task = taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .taskDefinitionKey(taskDefinitionKey)
+                .singleResult();
+        
+        if (task == null) {
+            log.warn("未找到任务: processInstanceId={}, taskDefinitionKey={}", processInstanceId, taskDefinitionKey);
+            return;
+        }
+        
+        log.info("完成任务: taskId={}, taskName={}", task.getId(), task.getName());
+        taskService.complete(task.getId(), variables);
+    }
 }
