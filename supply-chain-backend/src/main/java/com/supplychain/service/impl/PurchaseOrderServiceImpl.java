@@ -11,6 +11,7 @@ import com.supplychain.exception.BusinessException;
 import com.supplychain.mapper.PurchaseOrderItemMapper;
 import com.supplychain.mapper.PurchaseOrderMapper;
 import com.supplychain.service.ApprovalFlowService;
+import com.supplychain.service.BillFlowConfigService;
 import com.supplychain.service.PurchaseOrderService;
 import com.supplychain.service.WorkflowService;
 import com.supplychain.util.SecurityUtils;
@@ -37,6 +38,9 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
     private final PurchaseOrderItemMapper orderItemMapper;
     private final WorkflowService workflowService;
     private final ApprovalFlowService approvalFlowService;
+    private final BillFlowConfigService billFlowConfigService;
+    
+    private static final String BILL_TYPE_CODE = "purchase_order";
 
     @Override
     public Page<PurchaseOrder> pageQuery(Page<PurchaseOrder> page, PurchaseOrder query) {
@@ -153,8 +157,8 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
         variables.put("totalAmount", order.getTotalAmount());
         variables.put("initiator", order.getCreateBy());
         
-        Map<String, Object> flowConfig = approvalFlowService.getFlowConfigForProcess(
-                "purchase-order-approval", 
+        Map<String, Object> flowConfig = billFlowConfigService.getFlowConfigByBillTypeCode(
+                BILL_TYPE_CODE, 
                 variables
         );
         
@@ -202,11 +206,20 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
             variables.put("node3_enabled", false);
         }
 
-        log.info("启动审批流程，流程变量: {}", variables);
+        String flowCode = "purchase-order-approval";
+        if (flowConfig != null && flowConfig.get("flow") != null) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> flowMap = (Map<String, Object>) flowConfig.get("flow");
+            if (flowMap.get("flowCode") != null) {
+                flowCode = flowMap.get("flowCode").toString();
+            }
+        }
+        
+        log.info("启动审批流程，流程编码: {}, 流程变量: {}", flowCode, variables);
         
         String initiator = order.getCreateBy() != null ? String.valueOf(order.getCreateBy()) : null;
         String processInstanceId = workflowService.startProcessInstance(
-                "purchase-order-approval",
+                flowCode,
                 order.getOrderNo(),
                 initiator,
                 variables

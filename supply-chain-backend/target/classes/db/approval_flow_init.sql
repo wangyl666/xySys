@@ -54,9 +54,57 @@ CREATE TABLE IF NOT EXISTS sc_approval_node_assignee (
     KEY idx_flow_id (flow_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审批人配置表';
 
+-- 单据类型表
+CREATE TABLE IF NOT EXISTS sc_bill_type (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    bill_type_code VARCHAR(100) NOT NULL COMMENT '单据类型编码',
+    bill_type_name VARCHAR(100) NOT NULL COMMENT '单据类型名称',
+    description VARCHAR(500) COMMENT '描述',
+    status INT DEFAULT 1 COMMENT '状态：0-禁用，1-启用',
+    sort_order INT DEFAULT 1 COMMENT '排序',
+    module_name VARCHAR(100) COMMENT '所属模块',
+    create_by BIGINT COMMENT '创建人',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_by BIGINT COMMENT '更新人',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted INT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    UNIQUE KEY uk_bill_type_code (bill_type_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='单据类型表';
+
+-- 单据审批流配置表
+CREATE TABLE IF NOT EXISTS sc_bill_flow_config (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    bill_type_id BIGINT NOT NULL COMMENT '单据类型ID',
+    bill_type_code VARCHAR(100) NOT NULL COMMENT '单据类型编码',
+    flow_id BIGINT NOT NULL COMMENT '审批流ID',
+    flow_code VARCHAR(100) NOT NULL COMMENT '审批流编码',
+    status INT DEFAULT 1 COMMENT '状态：0-禁用，1-启用',
+    is_default INT DEFAULT 0 COMMENT '是否默认：0-否，1-是',
+    description VARCHAR(500) COMMENT '描述',
+    create_by BIGINT COMMENT '创建人',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_by BIGINT COMMENT '更新人',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted INT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    KEY idx_bill_type_id (bill_type_id),
+    KEY idx_bill_type_code (bill_type_code),
+    KEY idx_flow_id (flow_id),
+    KEY idx_flow_code (flow_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='单据审批流配置表';
+
 -- 初始化采购订单审批流模板
 INSERT INTO sc_approval_flow (flow_name, flow_code, flow_type, description, status, version, create_by, create_time)
 VALUES ('采购订单审批流程', 'purchase-order-approval', 'PURCHASE_ORDER', '采购订单提交后的审批流程', 0, 1, 1, NOW());
+
+-- 初始化单据类型
+INSERT INTO sc_bill_type (bill_type_code, bill_type_name, description, status, sort_order, module_name, create_by, create_time)
+VALUES ('purchase_order', '采购订单', '供应链模块的采购订单', 1, 1, 'supply_chain', 1, NOW());
+
+INSERT INTO sc_bill_type (bill_type_code, bill_type_name, description, status, sort_order, module_name, create_by, create_time)
+VALUES ('supplier', '供应商', '供应链模块的供应商', 1, 2, 'supply_chain', 1, NOW());
+
+INSERT INTO sc_bill_type (bill_type_code, bill_type_name, description, status, sort_order, module_name, create_by, create_time)
+VALUES ('material', '物料', '供应链模块的物料', 1, 3, 'supply_chain', 1, NOW());
 
 -- 示例：添加审批节点（需要根据实际需求配置）
 -- INSERT INTO sc_approval_node (flow_id, node_code, node_name, node_type, sort_order, approval_type, description)
