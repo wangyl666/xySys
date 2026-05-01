@@ -244,4 +244,98 @@ public class WorkflowServiceImpl implements WorkflowService {
         }
         return result;
     }
+
+    @Override
+    public List<Map<String, Object>> getMyStartedProcesses(String userId) {
+        log.info("获取我发起的流程: userId={}", userId);
+        
+        List<HistoricProcessInstance> processInstances = historyService.createHistoricProcessInstanceQuery()
+                .startedBy(userId)
+                .orderByProcessInstanceStartTime()
+                .desc()
+                .list();
+        
+        return convertToProcessInstanceMapList(processInstances);
+    }
+
+    @Override
+    public List<Map<String, Object>> getMyInvolvedProcesses(String userId) {
+        log.info("获取我参与的流程: userId={}", userId);
+        
+        List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
+                .taskAssignee(userId)
+                .finished()
+                .orderByHistoricTaskInstanceEndTime()
+                .desc()
+                .list();
+        
+        Map<String, Map<String, Object>> processMap = new HashMap<>();
+        
+        for (HistoricTaskInstance task : historicTasks) {
+            String processInstanceId = task.getProcessInstanceId();
+            
+            if (!processMap.containsKey(processInstanceId)) {
+                HistoricProcessInstance processInstance = historyService.createHistoricProcessInstanceQuery()
+                        .processInstanceId(processInstanceId)
+                        .singleResult();
+                
+                if (processInstance != null) {
+                    Map<String, Object> map = convertProcessInstanceToMap(processInstance);
+                    map.put("taskName", task.getName());
+                    map.put("handleTime", task.getEndTime());
+                    map.put("taskId", task.getId());
+                    
+                    String deleteReason = task.getDeleteReason();
+                    if (deleteReason != null && deleteReason.contains("approved")) {
+                        map.put("result", "approved");
+                    } else if (deleteReason != null && deleteReason.contains("rejected")) {
+                        map.put("result", "rejected");
+                    } else {
+                        map.put("result", "completed");
+                    }
+                    
+                    processMap.put(processInstanceId, map);
+                }
+            }
+        }
+        
+        return new ArrayList<>(processMap.values());
+    }
+
+    private List<Map<String, Object>> convertToProcessInstanceMapList(List<HistoricProcessInstance> processInstances) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (HistoricProcessInstance instance : processInstances) {
+            result.add(convertProcessInstanceToMap(instance));
+        }
+        return result;
+    }
+
+    private Map<String, Object> convertProcessInstanceToMap(HistoricProcessInstance instance) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("processInstanceId", instance.getId());
+        map.put("processDefinitionId", instance.getProcessDefinitionId());
+        map.put("processDefinitionKey", instance.getProcessDefinitionKey());
+        map.put("processDefinitionName", instance.getProcessDefinitionName());
+        map.put("businessKey", instance.getBusinessKey());
+        map.put("startTime", instance.getStartTime());
+        map.put("endTime", instance.getEndTime());
+        map.put("startUserId", instance.getStartUserId());
+        
+        if (instance.getEndTime() == null) {
+            map.put("status", "running");
+            map.put("result", null);
+        } else {
+            map.put("status", "ended");
+            Object approved = instance.getProcessVariables().get("approved");
+            if (Boolean.TRUE.equals(approved)) {
+                map.put("result", "approved");
+            } else if (Boolean.FALSE.equals(approved)) {
+                map.put("result", "rejected");
+            } else {
+                map.put("result", "completed");
+            }
+        }
+        
+        return map;
+    }
 }
