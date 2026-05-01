@@ -20,5 +20,7 @@ public class PurchaseOrder extends BaseEntity {
     private String orderStatus;
     private String approvalStatus;
     private String processInstanceId;
+    private Long flowId;
+    private String flowCode;
     private String remark;
 }
