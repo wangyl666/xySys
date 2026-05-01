@@ -27,6 +27,10 @@ const mutations = {
   }
 }
 
+const getters = {
+  token: state => state.token
+}
+
 const actions = {
   login({ commit }, userInfo) {
     const { username, password } = userInfo
@@ -96,5 +100,6 @@ export default {
   namespaced: true,
   state,
   mutations,
+  getters,
   actions
 }

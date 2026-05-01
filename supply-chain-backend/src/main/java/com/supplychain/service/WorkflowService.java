@@ -1,7 +1,5 @@
 package com.supplychain.service;
 
-import com.supplychain.common.Result;
-
 import java.util.List;
 import java.util.Map;
 
@@ -10,7 +8,7 @@ public interface WorkflowService {
     /**
      * 启动流程实例
      */
-    String startProcessInstance(String processDefinitionKey, String businessKey, Map<String, Object> variables);
+    String startProcessInstance(String processDefinitionKey, String businessKey, String initiator, Map<String, Object> variables);
 
     /**
      * 完成任务
@@ -81,4 +79,14 @@ public interface WorkflowService {
      * 终止流程实例
      */
     void terminateProcessInstance(String processInstanceId, String reason);
+
+    /**
+     * 获取我发起的流程实例列表
+     */
+    List<Map<String, Object>> getMyStartedProcesses(String userId);
+
+    /**
+     * 获取我参与的流程实例列表
+     */
+    List<Map<String, Object>> getMyInvolvedProcesses(String userId);
 }
