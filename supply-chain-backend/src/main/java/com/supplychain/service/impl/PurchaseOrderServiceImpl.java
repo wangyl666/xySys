@@ -208,10 +208,16 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
 
         String flowCode = "purchase-order-approval";
         if (flowConfig != null && flowConfig.get("flow") != null) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> flowMap = (Map<String, Object>) flowConfig.get("flow");
-            if (flowMap.get("flowCode") != null) {
-                flowCode = flowMap.get("flowCode").toString();
+            Object flowObj = flowConfig.get("flow");
+            if (flowObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> flowMap = (Map<String, Object>) flowObj;
+                if (flowMap.get("flowCode") != null) {
+                    flowCode = flowMap.get("flowCode").toString();
+                }
+            } else if (flowObj instanceof com.supplychain.entity.ApprovalFlow) {
+                com.supplychain.entity.ApprovalFlow flow = (com.supplychain.entity.ApprovalFlow) flowObj;
+                flowCode = flow.getFlowCode();
             }
         }
         
