@@ -79,6 +79,12 @@ export default {
       redirect: undefined
     }
   },
+  created() {
+    const { query } = this.$route
+    if (query.redirect) {
+      this.redirect = query.redirect
+    }
+  },
   methods: {
     ...mapActions({
       login: 'user/login'
@@ -89,7 +95,8 @@ export default {
           this.loading = true
           this.login(this.loginForm)
             .then(() => {
-              this.$router.push({ path: this.redirect || '/' })
+              const redirectPath = this.redirect || '/'
+              this.$router.push({ path: redirectPath }).catch(() => {})
               this.loading = false
             })
             .catch(() => {
