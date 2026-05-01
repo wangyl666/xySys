@@ -204,9 +204,11 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
 
         log.info("启动审批流程，流程变量: {}", variables);
         
+        String initiator = order.getCreateBy() != null ? String.valueOf(order.getCreateBy()) : null;
         String processInstanceId = workflowService.startProcessInstance(
                 "purchase-order-approval",
                 order.getOrderNo(),
+                initiator,
                 variables
         );
 

@@ -8,7 +8,7 @@ public interface WorkflowService {
     /**
      * 启动流程实例
      */
-    String startProcessInstance(String processDefinitionKey, String businessKey, Map<String, Object> variables);
+    String startProcessInstance(String processDefinitionKey, String businessKey, String initiator, Map<String, Object> variables);
 
     /**
      * 完成任务

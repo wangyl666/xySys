@@ -27,14 +27,24 @@ public class WorkflowServiceImpl implements WorkflowService {
     private final HistoryService historyService;
     private final RepositoryService repositoryService;
     private final ManagementService managementService;
+    private final IdentityService identityService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public String startProcessInstance(String processDefinitionKey, String businessKey, Map<String, Object> variables) {
-        log.info("启动流程实例: processDefinitionKey={}, businessKey={}", processDefinitionKey, businessKey);
-        ProcessInstance processInstance = runtimeService.startProcessInstanceByKey(processDefinitionKey, businessKey, variables);
-        log.info("流程实例启动成功: processInstanceId={}", processInstance.getId());
-        return processInstance.getId();
+    public String startProcessInstance(String processDefinitionKey, String businessKey, String initiator, Map<String, Object> variables) {
+        log.info("启动流程实例: processDefinitionKey={}, businessKey={}, initiator={}", processDefinitionKey, businessKey, initiator);
+        
+        try {
+            if (initiator != null) {
+                identityService.setAuthenticatedUserId(initiator);
+            }
+            
+            ProcessInstance processInstance = runtimeService.startProcessInstanceByKey(processDefinitionKey, businessKey, variables);
+            log.info("流程实例启动成功: processInstanceId={}", processInstance.getId());
+            return processInstance.getId();
+        } finally {
+            identityService.setAuthenticatedUserId(null);
+        }
     }
 
     @Override
