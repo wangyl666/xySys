@@ -55,6 +55,17 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="flowCode" label="审批流" min-width="150">
+          <template slot-scope="scope">
+            <template v-if="scope.row.flowCode">
+              <el-tag size="small" type="primary">{{ scope.row.flowCode }}</el-tag>
+              <div style="margin-top: 4px; font-size: 12px; color: #909399;">
+                {{ getFlowName(scope.row.flowCode) }}
+              </div>
+            </template>
+            <span v-else style="color: #909399;">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="orderDate" label="订单日期" min-width="160">
           <template slot-scope="scope">
             {{ formatTime(scope.row.orderDate) }}
@@ -282,6 +293,65 @@
         </el-table-column>
       </el-table>
     </el-dialog>
+
+    <el-dialog
+      title="选择审批流"
+      :visible.sync="selectFlowDialogVisible"
+      width="600px"
+      :close-on-click-modal="false"
+    >
+      <div class="select-flow-info">
+        <el-alert title="请选择审批流程" type="info" :closable="false" show-icon>
+          <template slot="default">
+            <p>订单编号：<strong>{{ currentSubmitOrder?.orderNo }}</strong></p>
+            <p>订单金额：<strong>¥{{ currentSubmitOrder?.totalAmount }}</strong></p>
+          </template>
+        </el-alert>
+      </div>
+
+      <el-divider content-position="left">可用审批流</el-divider>
+
+      <el-table 
+        :data="flowConfigList" 
+        v-loading="flowConfigList.length === 0" 
+        stripe
+        highlight-current-row
+        @current-row-key="id"
+        @row-click="(row) => { selectedFlowConfigId = row.id }"
+      >
+        <el-table-column label="选择" width="60">
+          <template slot-scope="scope">
+            <el-radio 
+              v-model="selectedFlowConfigId" 
+              :label="scope.row.id"
+              @change="() => {}"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="flowCode" label="审批流编码" min-width="150" />
+        <el-table-column prop="flowName" label="审批流名称" min-width="150">
+          <template slot-scope="scope">
+            <el-tag size="small" type="success">{{ getFlowName(scope.row.flowCode) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="isDefault" label="默认" width="70">
+          <template slot-scope="scope">
+            <el-tag v-if="scope.row.isDefault === 1" type="warning" size="small">默认</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="description" label="描述" min-width="120" show-overflow-tooltip />
+      </el-table>
+
+      <el-empty v-if="flowConfigList.length === 0" description="暂无可用的审批流配置" />
+
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="handleCancelSelectFlow">取消</el-button>
+        <el-button type="primary" :loading="submitLoading" @click="handleConfirmSubmit">
+          确认提交
+        </el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -290,9 +360,12 @@ import {
   getPurchaseOrderPage,
   createPurchaseOrder,
   submitPurchaseOrder,
+  submitPurchaseOrderWithFlowConfig,
   deletePurchaseOrder,
   getPurchaseOrderItems
 } from '@/api/purchase-order'
+import { getBillFlowConfigListByBillTypeCode } from '@/api/bill-flow-config'
+import { getApprovalFlowPage } from '@/api/approval-flow'
 
 export default {
   name: 'PurchaseOrder',
@@ -332,6 +405,11 @@ export default {
         { id: 4, materialName: '激光打印机', specification: 'HP M403dn', unit: '台', unitPrice: 2500.00 },
         { id: 5, materialName: '工业电机', specification: 'Y132S-4 5.5KW', unit: '台', unitPrice: 8500.00 }
       ],
+      flowConfigList: [],
+      flowList: [],
+      selectedFlowConfigId: null,
+      selectFlowDialogVisible: false,
+      currentSubmitOrder: null,
       dialogVisible: false,
       detailDialogVisible: false,
       currentOrder: {},
@@ -350,8 +428,36 @@ export default {
   },
   created() {
     this.loadOrderList()
+    this.loadFlowConfigList()
+    this.loadFlowList()
   },
   methods: {
+    loadFlowConfigList() {
+      getBillFlowConfigListByBillTypeCode('purchase_order')
+        .then(res => {
+          this.flowConfigList = res.data || []
+          const defaultConfig = this.flowConfigList.find(c => c.isDefault === 1)
+          if (defaultConfig) {
+            this.selectedFlowConfigId = defaultConfig.id
+          }
+        })
+        .catch(() => {
+          this.flowConfigList = []
+        })
+    },
+    loadFlowList() {
+      getApprovalFlowPage({ current: 1, size: 1000 })
+        .then(res => {
+          this.flowList = res.data?.records || []
+        })
+        .catch(() => {
+          this.flowList = []
+        })
+    },
+    getFlowName(flowCode) {
+      const flow = this.flowList.find(f => f.flowCode === flowCode)
+      return flow ? flow.flowName : flowCode
+    },
     loadOrderList() {
       this.loading = true
       const params = {
@@ -465,19 +571,37 @@ export default {
       this.detailDialogVisible = true
     },
     handleSubmit(row) {
-      this.$confirm('确定要提交该订单审批吗?', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      })
+      this.currentSubmitOrder = row
+      const defaultConfig = this.flowConfigList.find(c => c.isDefault === 1)
+      this.selectedFlowConfigId = defaultConfig ? defaultConfig.id : null
+      this.selectFlowDialogVisible = true
+    },
+    handleConfirmSubmit() {
+      this.selectFlowDialogVisible = false
+      
+      const orderId = this.currentSubmitOrder.id
+      const flowConfigId = this.selectedFlowConfigId
+      
+      this.submitLoading = true
+      
+      const promise = flowConfigId 
+        ? submitPurchaseOrderWithFlowConfig(orderId, flowConfigId)
+        : submitPurchaseOrder(orderId)
+      
+      promise
         .then(() => {
-          submitPurchaseOrder(row.id)
-            .then(() => {
-              this.$message.success('提交成功')
-              this.loadOrderList()
-            })
+          this.$message.success('提交成功')
+          this.loadOrderList()
+          this.submitLoading = false
+          this.currentSubmitOrder = null
         })
-        .catch(() => {})
+        .catch(() => {
+          this.submitLoading = false
+        })
+    },
+    handleCancelSelectFlow() {
+      this.selectFlowDialogVisible = false
+      this.currentSubmitOrder = null
     },
     handleDelete(row) {
       this.$confirm('确定要删除该订单吗?', '提示', {
@@ -547,6 +671,15 @@ export default {
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+}
+
+.select-flow-info {
+  margin-bottom: 15px;
+
+  p {
+    margin: 8px 0;
+    font-size: 14px;
   }
 }
 </style>
