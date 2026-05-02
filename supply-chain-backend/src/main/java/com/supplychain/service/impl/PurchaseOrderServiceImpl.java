@@ -139,7 +139,13 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String submitOrder(Long orderId) {
-        log.info("提交采购订单: orderId={}", orderId);
+        return submitOrderWithFlowConfig(orderId, null);
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String submitOrderWithFlowConfig(Long orderId, Long flowConfigId) {
+        log.info("提交采购订单: orderId={}, flowConfigId={}", orderId, flowConfigId);
 
         PurchaseOrder order = this.getById(orderId);
         if (order == null) {
@@ -161,10 +167,30 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
         String flowCode = null;
         String processKey = "purchase-order-approval";
         
-        Map<String, Object> flowConfig = billFlowConfigService.getFlowConfigByBillTypeCode(
-                BILL_TYPE_CODE, 
-                variables
-        );
+        Map<String, Object> flowConfig = null;
+        
+        if (flowConfigId != null) {
+            log.info("使用指定的审批流配置: flowConfigId={}", flowConfigId);
+            BillFlowConfig config = billFlowConfigService.getById(flowConfigId);
+            if (config == null) {
+                throw new BusinessException("指定的审批流配置不存在");
+            }
+            if (config.getStatus() != 1) {
+                throw new BusinessException("指定的审批流配置已禁用");
+            }
+            flowConfig = approvalFlowService.getFlowConfigForProcess(config.getFlowCode(), variables);
+            
+            if (flowConfig != null) {
+                flowId = config.getFlowId();
+                flowCode = config.getFlowCode();
+            }
+        } else {
+            log.info("使用默认审批流配置（按单据类型查找）");
+            flowConfig = billFlowConfigService.getFlowConfigByBillTypeCode(
+                    BILL_TYPE_CODE, 
+                    variables
+            );
+        }
         
         if (flowConfig != null) {
             if (flowConfig.get("processKey") != null) {
@@ -176,10 +202,10 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
                 if (flowObj instanceof Map) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> flowMap = (Map<String, Object>) flowObj;
-                    if (flowMap.get("id") != null) {
+                    if (flowId == null && flowMap.get("id") != null) {
                         flowId = Long.parseLong(flowMap.get("id").toString());
                     }
-                    if (flowMap.get("flowCode") != null) {
+                    if (flowCode == null && flowMap.get("flowCode") != null) {
                         flowCode = flowMap.get("flowCode").toString();
                     }
                     if (flowMap.get("processKey") != null && StringUtils.hasText(flowMap.get("processKey").toString())) {
@@ -187,8 +213,12 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
                     }
                 } else if (flowObj instanceof com.supplychain.entity.ApprovalFlow) {
                     com.supplychain.entity.ApprovalFlow flow = (com.supplychain.entity.ApprovalFlow) flowObj;
-                    flowId = flow.getId();
-                    flowCode = flow.getFlowCode();
+                    if (flowId == null) {
+                        flowId = flow.getId();
+                    }
+                    if (flowCode == null) {
+                        flowCode = flow.getFlowCode();
+                    }
                     if (StringUtils.hasText(flow.getProcessKey())) {
                         processKey = flow.getProcessKey();
                     }

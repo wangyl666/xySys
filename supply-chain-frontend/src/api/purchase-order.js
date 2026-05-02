@@ -8,6 +8,14 @@ export function getPurchaseOrderPage(params) {
   })
 }
 
+export function submitPurchaseOrderWithFlowConfig(id, flowConfigId) {
+  return request({
+    url: `/api/purchase-order/${id}/submit`,
+    method: 'post',
+    params: flowConfigId ? { flowConfigId } : {}
+  })
+}
+
 export function getPurchaseOrderById(id) {
   return request({
     url: `/api/purchase-order/${id}`,

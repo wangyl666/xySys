@@ -28,6 +28,11 @@ public interface PurchaseOrderService extends IService<PurchaseOrder> {
      * 提交采购订单（启动审批流程）
      */
     String submitOrder(Long orderId);
+    
+    /**
+     * 提交采购订单（指定审批流配置ID）
+     */
+    String submitOrderWithFlowConfig(Long orderId, Long flowConfigId);
 
     /**
      * 审批采购订单

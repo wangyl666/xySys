@@ -81,8 +81,15 @@ public class PurchaseOrderController {
     @ApiOperation("提交采购订单")
     @PostMapping("/{id}/submit")
     public Result<String> submit(
-            @ApiParam("订单ID") @PathVariable Long id) {
-        String processInstanceId = purchaseOrderService.submitOrder(id);
+            @ApiParam("订单ID") @PathVariable Long id,
+            @ApiParam("审批流配置ID（可选，不传则使用默认配置）") 
+            @RequestParam(required = false) Long flowConfigId) {
+        String processInstanceId;
+        if (flowConfigId != null) {
+            processInstanceId = purchaseOrderService.submitOrderWithFlowConfig(id, flowConfigId);
+        } else {
+            processInstanceId = purchaseOrderService.submitOrder(id);
+        }
         return Result.success(processInstanceId);
     }
 
