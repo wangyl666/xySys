@@ -303,19 +303,20 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
                 variables
         );
 
-        workflowService.completeTaskByProcessInstanceIdAndTaskKey(
-                processInstanceId, 
-                "initiatorTask", 
-                new HashMap<>()
-        );
-        log.info("自动完成提交任务: processInstanceId={}", processInstanceId);
-
         order.setOrderStatus("SUBMITTED");
         order.setApprovalStatus("APPROVING");
         order.setProcessInstanceId(processInstanceId);
         order.setFlowId(flowId);
         order.setFlowCode(flowCode);
         this.updateById(order);
+        log.info("订单状态已更新，准备完成提交任务: orderId={}, processInstanceId={}", orderId, processInstanceId);
+
+        workflowService.completeTaskByProcessInstanceIdAndTaskKey(
+                processInstanceId, 
+                "initiatorTask", 
+                new HashMap<>()
+        );
+        log.info("自动完成提交任务: processInstanceId={}", processInstanceId);
 
         log.info("采购订单提交成功: orderId={}, processInstanceId={}, flowId={}, flowCode={}", 
                 orderId, processInstanceId, flowId, flowCode);
