@@ -3,10 +3,7 @@ package com.supplychain.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.supplychain.entity.ApprovalNode;
-import com.supplychain.entity.ApprovalNodeAssignee;
-import com.supplychain.entity.PurchaseOrder;
-import com.supplychain.entity.PurchaseOrderItem;
+import com.supplychain.entity.*;
 import com.supplychain.exception.BusinessException;
 import com.supplychain.mapper.PurchaseOrderItemMapper;
 import com.supplychain.mapper.PurchaseOrderMapper;
@@ -162,6 +159,7 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
         variables.put("supplierId", order.getSupplierId());
         variables.put("totalAmount", order.getTotalAmount());
         variables.put("initiator", order.getCreateBy());
+        variables.put("approved", true);
         
         Long flowId = null;
         String flowCode = null;
