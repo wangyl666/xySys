@@ -3,13 +3,15 @@ package com.supplychain.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.supplychain.entity.PurchaseOrder;
-import com.supplychain.entity.PurchaseOrderItem;
+import com.supplychain.entity.*;
 import com.supplychain.exception.BusinessException;
 import com.supplychain.mapper.PurchaseOrderItemMapper;
 import com.supplychain.mapper.PurchaseOrderMapper;
+import com.supplychain.service.ApprovalFlowService;
+import com.supplychain.service.BillFlowConfigService;
 import com.supplychain.service.PurchaseOrderService;
 import com.supplychain.service.WorkflowService;
+import com.supplychain.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +34,10 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
 
     private final PurchaseOrderItemMapper orderItemMapper;
     private final WorkflowService workflowService;
+    private final ApprovalFlowService approvalFlowService;
+    private final BillFlowConfigService billFlowConfigService;
+    
+    private static final String BILL_TYPE_CODE = "purchase_order";
 
     @Override
     public Page<PurchaseOrder> pageQuery(Page<PurchaseOrder> page, PurchaseOrder query) {
@@ -49,6 +56,14 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
                 wrapper.eq(PurchaseOrder::getApprovalStatus, query.getApprovalStatus());
             }
         }
+        
+        if (!SecurityUtils.isAdmin()) {
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            if (currentUserId != null) {
+                wrapper.eq(PurchaseOrder::getCreateBy, currentUserId);
+            }
+        }
+        
         wrapper.orderByDesc(PurchaseOrder::getCreateTime);
         return this.page(page, wrapper);
     }
@@ -121,7 +136,13 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String submitOrder(Long orderId) {
-        log.info("提交采购订单: orderId={}", orderId);
+        return submitOrderWithFlowConfig(orderId, null);
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String submitOrderWithFlowConfig(Long orderId, Long flowConfigId) {
+        log.info("提交采购订单: orderId={}, flowConfigId={}", orderId, flowConfigId);
 
         PurchaseOrder order = this.getById(orderId);
         if (order == null) {
@@ -138,19 +159,166 @@ public class PurchaseOrderServiceImpl extends ServiceImpl<PurchaseOrderMapper, P
         variables.put("supplierId", order.getSupplierId());
         variables.put("totalAmount", order.getTotalAmount());
         variables.put("initiator", order.getCreateBy());
-
+        variables.put("approved", true);
+        
+        Long flowId = null;
+        String flowCode = null;
+        String processKey = "purchase-order-approval";
+        
+        Map<String, Object> flowConfig = null;
+        
+        if (flowConfigId != null) {
+            log.info("使用指定的审批流配置: flowConfigId={}", flowConfigId);
+            BillFlowConfig config = billFlowConfigService.getById(flowConfigId);
+            if (config == null) {
+                throw new BusinessException("指定的审批流配置不存在");
+            }
+            if (config.getStatus() != 1) {
+                throw new BusinessException("指定的审批流配置已禁用");
+            }
+            flowConfig = approvalFlowService.getFlowConfigForProcess(config.getFlowCode(), variables);
+            
+            if (flowConfig != null) {
+                flowId = config.getFlowId();
+                flowCode = config.getFlowCode();
+            }
+        } else {
+            log.info("使用默认审批流配置（按单据类型查找）");
+            flowConfig = billFlowConfigService.getFlowConfigByBillTypeCode(
+                    BILL_TYPE_CODE, 
+                    variables
+            );
+        }
+        
+        if (flowConfig != null) {
+            if (flowConfig.get("processKey") != null) {
+                processKey = flowConfig.get("processKey").toString();
+            }
+            
+            if (flowConfig.get("flow") != null) {
+                Object flowObj = flowConfig.get("flow");
+                if (flowObj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> flowMap = (Map<String, Object>) flowObj;
+                    if (flowId == null && flowMap.get("id") != null) {
+                        flowId = Long.parseLong(flowMap.get("id").toString());
+                    }
+                    if (flowCode == null && flowMap.get("flowCode") != null) {
+                        flowCode = flowMap.get("flowCode").toString();
+                    }
+                    if (flowMap.get("processKey") != null && StringUtils.hasText(flowMap.get("processKey").toString())) {
+                        processKey = flowMap.get("processKey").toString();
+                    }
+                } else if (flowObj instanceof com.supplychain.entity.ApprovalFlow) {
+                    com.supplychain.entity.ApprovalFlow flow = (com.supplychain.entity.ApprovalFlow) flowObj;
+                    if (flowId == null) {
+                        flowId = flow.getId();
+                    }
+                    if (flowCode == null) {
+                        flowCode = flow.getFlowCode();
+                    }
+                    if (StringUtils.hasText(flow.getProcessKey())) {
+                        processKey = flow.getProcessKey();
+                    }
+                }
+            }
+            
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> nodes = (List<Map<String, Object>>) flowConfig.get("nodes");
+            if (nodes != null && !nodes.isEmpty()) {
+                Map<String, Boolean> enabledNodes = new HashMap<>();
+                
+                for (Map<String, Object> nodeConfig : nodes) {
+                    ApprovalNode node = null;
+                    if (nodeConfig.get("node") != null && nodeConfig.get("node") instanceof ApprovalNode) {
+                        node = (ApprovalNode) nodeConfig.get("node");
+                    }
+                    
+                    if (node == null || !StringUtils.hasText(node.getNodeCode())) {
+                        log.warn("审批节点缺少 node_code，跳过: {}", nodeConfig);
+                        continue;
+                    }
+                    
+                    String nodeCode = node.getNodeCode();
+                    enabledNodes.put(nodeCode, true);
+                    
+                    @SuppressWarnings("unchecked")
+                    List<String> assigneeUserIds = (List<String>) nodeConfig.get("assigneeUserIds");
+                    if (assigneeUserIds != null && !assigneeUserIds.isEmpty()) {
+                        if (assigneeUserIds.size() == 1) {
+                            variables.put(nodeCode + "_assignee", assigneeUserIds.get(0));
+                            log.info("设置节点 [{}] 审批人: {}", nodeCode, assigneeUserIds.get(0));
+                        } else {
+                            variables.put(nodeCode + "_candidateUsers", assigneeUserIds);
+                            log.info("设置节点 [{}] 候选用户: {}", nodeCode, assigneeUserIds);
+                        }
+                    }
+                    
+                    @SuppressWarnings("unchecked")
+                    List<String> assigneeGroupIds = (List<String>) nodeConfig.get("assigneeGroupIds");
+                    if (assigneeGroupIds != null && !assigneeGroupIds.isEmpty()) {
+                        variables.put(nodeCode + "_candidateGroups", assigneeGroupIds);
+                        log.info("设置节点 [{}] 候选组: {}", nodeCode, assigneeGroupIds);
+                    }
+                }
+                
+                if (!enabledNodes.containsKey("node1Task")) {
+                    variables.put("node1_enabled", false);
+                } else {
+                    variables.put("node1_enabled", true);
+                }
+                if (!enabledNodes.containsKey("node2Task")) {
+                    variables.put("node2_enabled", false);
+                } else {
+                    variables.put("node2_enabled", true);
+                }
+                if (!enabledNodes.containsKey("node3Task")) {
+                    variables.put("node3_enabled", false);
+                } else {
+                    variables.put("node3_enabled", true);
+                }
+                
+                log.info("审批节点启用状态: node1_enabled={}, node2_enabled={}, node3_enabled={}",
+                        variables.get("node1_enabled"), variables.get("node2_enabled"), variables.get("node3_enabled"));
+            } else {
+                log.warn("未配置审批节点，将跳过所有审批环节");
+                variables.put("node1_enabled", false);
+                variables.put("node2_enabled", false);
+                variables.put("node3_enabled", false);
+            }
+        } else {
+            log.warn("未找到采购订单审批流配置，使用默认流程（跳过所有审批）");
+            variables.put("node1_enabled", false);
+            variables.put("node2_enabled", false);
+            variables.put("node3_enabled", false);
+        }
+        
+        log.info("启动审批流程，流程定义Key: {}, 流程变量: {}", processKey, variables);
+        
+        String initiator = order.getCreateBy() != null ? String.valueOf(order.getCreateBy()) : null;
         String processInstanceId = workflowService.startProcessInstance(
-                "purchase-order-approval",
+                processKey,
                 order.getOrderNo(),
+                initiator,
                 variables
         );
+
+        workflowService.completeTaskByProcessInstanceIdAndTaskKey(
+                processInstanceId, 
+                "initiatorTask", 
+                new HashMap<>()
+        );
+        log.info("自动完成提交任务: processInstanceId={}", processInstanceId);
 
         order.setOrderStatus("SUBMITTED");
         order.setApprovalStatus("APPROVING");
         order.setProcessInstanceId(processInstanceId);
+        order.setFlowId(flowId);
+        order.setFlowCode(flowCode);
         this.updateById(order);
 
-        log.info("采购订单提交成功: orderId={}, processInstanceId={}", orderId, processInstanceId);
+        log.info("采购订单提交成功: orderId={}, processInstanceId={}, flowId={}, flowCode={}", 
+                orderId, processInstanceId, flowId, flowCode);
         return processInstanceId;
     }
 

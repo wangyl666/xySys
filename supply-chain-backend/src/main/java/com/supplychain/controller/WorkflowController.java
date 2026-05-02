@@ -35,6 +35,22 @@ public class WorkflowController {
         return Result.success(tasks);
     }
 
+    @ApiOperation("获取我发起的流程")
+    @GetMapping("/my-started/{userId}")
+    public Result<List<Map<String, Object>>> getMyStartedProcesses(
+            @ApiParam("用户ID") @PathVariable String userId) {
+        List<Map<String, Object>> processes = workflowService.getMyStartedProcesses(userId);
+        return Result.success(processes);
+    }
+
+    @ApiOperation("获取我参与的流程")
+    @GetMapping("/my-involved/{userId}")
+    public Result<List<Map<String, Object>>> getMyInvolvedProcesses(
+            @ApiParam("用户ID") @PathVariable String userId) {
+        List<Map<String, Object>> processes = workflowService.getMyInvolvedProcesses(userId);
+        return Result.success(processes);
+    }
+
     @ApiOperation("认领任务")
     @PostMapping("/claim/{taskId}/{userId}")
     public Result<Void> claimTask(

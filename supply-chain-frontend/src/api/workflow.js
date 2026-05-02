@@ -14,6 +14,20 @@ export function getDoneTasks(userId) {
   })
 }
 
+export function getMyStartedProcesses(userId) {
+  return request({
+    url: `/api/workflow/my-started/${userId}`,
+    method: 'get'
+  })
+}
+
+export function getMyInvolvedProcesses(userId) {
+  return request({
+    url: `/api/workflow/my-involved/${userId}`,
+    method: 'get'
+  })
+}
+
 export function claimTask(taskId, userId) {
   return request({
     url: `/api/workflow/claim/${taskId}/${userId}`,
